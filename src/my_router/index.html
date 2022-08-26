@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <button onclick="myHistory.push('/home',{title:'home'})">home</button>
+    <br />
+    <button onclick="myHistory.push('/about',{title:'about'})">about</button>
+    <br />
+    <button onclick="myHistory.replace('/profile',{title:'profile'})">
+      replace profile
+    </button>
+    <script>
+      // 前端路由的实现原理  h5模式或hash模式  改变路径都不会向服务器发送请求 history.pushState(state,null,'/home')
+      // const myHistory = createWebHashHistory();
+      // console.log(myHistory);
+      // // 监听返回前进按钮
+      // myHistory.listen((to, from, { isBack }) => {
+      //   console.log(to, from, isBack);
+      // });
+    </script>
+  </body>
+</html>
