@@ -82,14 +82,83 @@ const START_LOCATION_NORMALIZED = {
   path: "/",
   matched: [], // 当前路径匹配到的记录
 };
-
+function useCallback() {
+  // 闭包的特性
+  const handlers = [];
+  function add(handler) {
+    handlers.push(handler);
+  }
+  return {
+    add,
+    list: () => handlers,
+  };
+}
 function createRouter(options) {
   const routerHistory = options.history;
-
   // 格式化路由配置 好处理
   const matcher = createRouterMatcher(options.routes); // 格式化好的路由routse配置
 
   const currentRoute = shallowRef(START_LOCATION_NORMALIZED);
+
+  // 定义钩子
+  const beforeGuards = useCallback();
+  const beforeResolveGuards = useCallback();
+  const afterGuargs = useCallback();
+  function extractChangeRecords(to, from) {
+    const leavingRecords = [];
+    const updatingRecords = [];
+    const enteringRecords = [];
+    const len = Math.max(to.matched.length, from.matched.length);
+
+    for (let i = 0; i < len; i++) {
+      const recordFrom = from.matched[i];
+      if (recordFrom) {
+        if (to.matched.find((record) => record.path === recordFrom.path)) {
+          updatingRecords.push(recordFrom);
+        } else {
+          leavingRecords.push(recordFrom);
+        }
+      }
+
+      const recordTo = to.matched[i];
+      if (recordTo) {
+        if (!from.matched.find((record) => record.path === recordTo.path)) {
+          enteringRecords.push(recordTo);
+        }
+      }
+    }
+    return [leavingRecords, updatingRecords, enteringRecords];
+  }
+  function extractComponentsGuards(matched, guardType, to, from) {
+    const guards = [];
+    for (const record of matched) {
+      const rawComponent = record.components.default;
+      const guard = rawComponent[guardType];
+
+      if (guard) {
+        guards.push(guardToPromise(guard, to, from, record));
+      }
+    }
+
+    return guards;
+  }
+  function guardToPromise(guard, to, from, record) {
+    return function () {
+      return new Promise((resolve, reject) => {
+        const next = () => resolve();
+        const guardReturn = guard.call(record, to, from, next); // 还可以通过钩子返回值决定跳换与否
+        return Promise.resolve(guardReturn).then(next); // 自动调用 next
+      });
+    };
+  }
+  function runGuardsQueue(guards) {
+    // 多个guards情况，promise组合
+    return guards.reduce((promise, guard) => {
+      return promise.then(() => {
+        return guard();
+      });
+    }, Promise.resolve());
+  }
   function resolve(to) {
     if (typeof to === "string") {
       return matcher.resolve({ path: to });
@@ -107,6 +176,67 @@ function createRouter(options) {
       finalizeNavigation(targetLocation, from, true);
     });
   }
+  /**
+   * 实现路由钩子
+   * @param {*} to
+   * @param {*} from
+   */
+  async function navigate(to, from) {
+    // 可以处理组件内的路由钩子
+    const [leavingRecords, updatingRecords, enteringRecords] =
+      extractChangeRecords(to, from);
+    // 找出组件内对应的钩子
+    let guards = extractComponentsGuards(
+      leavingRecords.reverse(),
+      "beforeRouteLeave",
+      to,
+      from
+    );
+    return runGuardsQueue(guards)
+      .then(() => {
+        // 还是那个一个路由离开了，执行全局的进入
+        guards = [];
+        for (const guard of beforeGuards.list()) {
+          guards.push(guardToPromise(guard, to, from, guard));
+        }
+        return runGuardsQueue(guards);
+      })
+      .then(() => {
+        // 现在应该走更新的钩子
+        guards = extractComponentsGuards(
+          updatingRecords.reverse(),
+          "beforeRouteUpdate",
+          to,
+          from
+        );
+        return runGuardsQueue(guards);
+      })
+      .then(() => {
+        guards = [];
+        for (const record of to.matched) {
+          if (record.beforeEnter) {
+            guards.push(guardToPromise(record.beforeEnter, to, from, record));
+          }
+        }
+        return runGuardsQueue(guards);
+      })
+      .then(() => {
+        guards = extractComponentsGuards(
+          enteringRecords.reverse(),
+          "beforeRouteEnter",
+          to,
+          from
+        );
+        return runGuardsQueue(guards);
+      })
+      .then(() => {
+        guards = [];
+        for (const guard of beforeResolveGuards.list()) {
+          guards.push(guardToPromise(guard, to, from, guard));
+        }
+        return runGuardsQueue(guards);
+      });
+  }
   function finalizeNavigation(to, from, replace = false) {
     // 第一次
     if (from === START_LOCATION_NORMALIZED || replace) {
@@ -115,7 +245,7 @@ function createRouter(options) {
       routerHistory.push(to.path);
     }
     currentRoute.value = to;
-    console.log(currentRoute.value);
+    // console.log(currentRoute.value);
     // 还需要监听 popstate
     markAsReady();
   }
@@ -123,8 +253,18 @@ function createRouter(options) {
     // 通过routes记录 选择渲染的匹配项
     const targetLocation = resolve(to);
     const from = currentRoute.value; // 从哪里来
-
-    finalizeNavigation(targetLocation, from);
+    navigate(targetLocation, from)
+      .then(() => {
+        console.log("跳转");
+        return finalizeNavigation(targetLocation, from); // 调用跳转函数
+      })
+      .then(() => {
+        // 调用离开的钩子
+        const afterGuardList = afterGuargs.list();
+        for (let i = 0; i < afterGuardList.length; i++) {
+          afterGuardList[i](targetLocation, from);
+        }
+      });
   }
   function push(to) {
     return pushWithRedirect(to);
@@ -132,6 +272,9 @@ function createRouter(options) {
   const router = {
     push,
     replace() {},
+    beforeEach: beforeGuards.add,
+    beforeResolve: beforeResolveGuards.add,
+    afterEach: afterGuargs.add,
     install(app) {
       const reactiveRoute = {};
       for (const key in currentRoute.value) {

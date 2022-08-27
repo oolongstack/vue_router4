@@ -26,6 +26,10 @@ const routes = [
   {
     path: "/about",
     component: About,
+    beforeEnter(to, from, next) {
+      console.log("about router beforeEnter");
+      next();
+    },
   },
 ];
 
@@ -34,4 +38,15 @@ const router = createRouter({
   history: createWebHistory(),
 });
 
+router.beforeEach((to, from, next) => {
+  console.log("beforeEach");
+});
+
+router.beforeResolve((to, from, next) => {
+  console.log("beforeResolve");
+});
+
+router.afterEach((to, from) => {
+  console.log("afterEach", to, from);
+});
 export default router;

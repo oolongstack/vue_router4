@@ -7,8 +7,23 @@
   </div>
 </template>
 
-<script setup>
+<script>
 
+export default {
+  beforeRouteLeave(to, from, next) {
+    console.log('home beforeRouteLeave');
+    next()
+  },
+
+  beforeRouteUpdate(to, from, next) {
+    console.log('home beforeRouteUpdate');
+    next()
+  },
+  beforeRouteEnter(to, from, next) {
+    console.log('home beforeRouteEnter');
+    next()
+  }
+}
 </script>
 
 <style lang="scss" scoped>
