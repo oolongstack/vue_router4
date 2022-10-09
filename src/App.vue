@@ -1,16 +1,15 @@
 <template>
   <router-link to="/" :replace="false">home</router-link>
-  <br>
+  <br />
   <router-link to="/about" :replace="false">about</router-link>
 
-  <router-view>
-    default内容
-  </router-view>
+  <router-view />
 </template>
 <script setup>
-import { useRouter, useRoute } from '@/my_router'
-import { getCurrentInstance } from 'vue';
-
+import { useRouter, useRoute } from "@/router_core";
+const router = useRouter();
+const route = useRoute();
+console.log(router, "router");
+console.log(route, "route");
 </script>
-<style scoped>
-</style>
+<style scoped></style>
